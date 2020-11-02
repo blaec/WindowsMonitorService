@@ -1,12 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Diagnostics;
-using System.Linq;
 using System.ServiceProcess;
-using System.Text;
-using System.Threading.Tasks;
 using System.Timers;
 using System.Xml;
 
@@ -17,12 +11,12 @@ namespace monitorservice
         private const string SERVICE_NAME = "MonitorService";
         private const string APP_NAME = "Application";
 
-        private string HomeDir = (new System.IO.DirectoryInfo(System.AppDomain.CurrentDomain.BaseDirectory)).FullName.Trim();
-        private string source_path = "";
-        private string destination_path = "";
-        private int weekday = 0;
+        private string homeDir = (new System.IO.DirectoryInfo(System.AppDomain.CurrentDomain.BaseDirectory)).FullName.Trim();
+        private string sourcePath = "";
+        private string destinationPath = "";
+        private int weekDay = 0;
         private string time = "";
-        private Boolean IsReady = false;
+        private bool isReady = false;
         private backupfiles BackupEngine = new backupfiles();
 
         public Timer ServiceTimer { get; set; } = null;
@@ -39,10 +33,9 @@ namespace monitorservice
             {
                 EventLog.CreateEventSource(SERVICE_NAME, APP_NAME);
             }
-            LogEvent(string.Format($"{SERVICE_NAME} starts on {DateTime.Now:yyyy-MM-dd hh:mm:ss tt}"),
-                     EventLogEntryType.Information);
+            LogEvent($"{SERVICE_NAME} starts on {DateTime.Now:yyyy-MM-dd hh:mm:ss tt}", EventLogEntryType.Information);
 
-            this.check_parameters(); //Need to load service behavior parameters
+            CheckParameters(); //Need to load service behavior parameters
 
             /// In this case a Timer object is instantiated and started.
             /// Every 300 milliseconds, the Elapsed event of the timer will be fired and the timer_Elapsed method will be executed.
@@ -55,30 +48,38 @@ namespace monitorservice
             ServiceTimer.Start();
         }
 
-        private void timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        private void timer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            if (!this.IsReady)
+            if (isReady)
             {
-                return;
-            }
-            if (this.weekday != 0) //Need to know if current weekday matches parameter's weekday
-{
-                if (((int)System.DateTime.Now.DayOfWeek) + 1 != this.weekday)
+                if (weekDay != 0) //Need to know if current weekday matches parameter's weekday
+                {
+                    if ((int)DateTime.Now.DayOfWeek + 1 != weekDay)
+                    {
+                        return;
+                    }
+                }
+                if (DateTime.Now.TimeOfDay < TimeSpan.Parse(time)) //If current daytime is earlier than defined in parameters, the process is stoped
                 {
                     return;
                 }
+                if (BackupEngine.isBusy) //If backup process was previously started we do nothing
+                {
+                    return;
+                }
+                LogEvent($"{SERVICE_NAME} start backup", EventLogEntryType.Information);
+                try
+                {
+                    BackupEngine.sourcePath = sourcePath;
+                    BackupEngine.destinationPath = destinationPath;
+                    BackupEngine.DoBackup();
+                }
+                catch (Exception ex)
+                {
+                    LogEvent($"{SERVICE_NAME} failed to backup {ex.Message}", EventLogEntryType.Error);
+                }
+                LogEvent($"{SERVICE_NAME} backup complete", EventLogEntryType.Information);
             }
-            if (DateTime.Now.TimeOfDay < System.TimeSpan.Parse(this.time)) //If current daytime is earlier than defined in parameters, the process is stoped
-            {
-                return;
-            }
-            if (this.BackupEngine.IsBusy) //If backup process was previously started we do nothing
-            {
-                return;
-            }
-            this.BackupEngine.source_path = this.source_path;
-            this.BackupEngine.destination_path = this.destination_path;
-            this.BackupEngine.DoBackup();
         }
 
         /// <summary>
@@ -90,8 +91,7 @@ namespace monitorservice
             ServiceTimer.Dispose();
             ServiceTimer = null;
 
-            LogEvent(string.Format($"{SERVICE_NAME} stops on {DateTime.Now:yyyy-MM-dd hh:mm:ss tt}"),
-                     EventLogEntryType.Information);
+            LogEvent($"{SERVICE_NAME} stops on {DateTime.Now:yyyy-MM-dd hh:mm:ss tt}", EventLogEntryType.Information);
         }
 
         private void LogEvent(string message, EventLogEntryType entryType)
@@ -104,49 +104,53 @@ namespace monitorservice
             eventLog.WriteEntry(message, entryType);
         }
 
-        private void check_parameters()
+        private void CheckParameters()
         {
-            if (!System.IO.Directory.Exists(this.HomeDir + "\\parameters"))
+            string paramsFolder = homeDir + "\\parameters";
+            string paramsFile = paramsFolder + "\\srvparams.xml";
+            isReady = false;
+            if (!System.IO.Directory.Exists(paramsFolder))
             {
-                System.IO.Directory.CreateDirectory(this.HomeDir + "\\parameters");
-                this.LogEvent(String.Format("MonitorService: parameters file folder was just been created"), EventLogEntryType.Information);
-                this.IsReady = false;
+                System.IO.Directory.CreateDirectory(paramsFolder);
+                LogEvent($"{SERVICE_NAME}: parameters file folder {paramsFolder} was just been created", EventLogEntryType.Information);
             }
             else
             {
-                if (System.IO.File.Exists(this.HomeDir + "\\parameters\\srvparams.xml"))
+                if (!System.IO.File.Exists(paramsFile))
                 {
-                    Boolean docparsed = true;
-                    XmlDocument parametersdoc = new XmlDocument();
-                    try
-                    {
-                        parametersdoc.Load(this.HomeDir + "\\parameters\\srvparams.xml");
-    }
-                    catch (XmlException ex)
-                    {
-                        docparsed = false;
-                        this.IsReady = false;
-                        this.LogEvent(String.Format("Parameters file couldn't be read: {0}", ex.Message), EventLogEntryType.Error);
-                    }
-                    if (docparsed)
-                    {
-                        XmlNode BackupParameters = parametersdoc.ChildNodes.Item(1).ChildNodes.Item(0);
-                        this.source_path = BackupParameters.Attributes.GetNamedItem("source").Value.Trim();
-                        this.destination_path = BackupParameters.Attributes.GetNamedItem("destination").Value.Trim();
-                        this.weekday = Convert.ToInt32(BackupParameters.Attributes.GetNamedItem("dayofweek").Value.Trim());
-                        this.time = BackupParameters.Attributes.GetNamedItem("hour").Value.Trim();
-                        this.IsReady = true;
-
-                        this.LogEvent(String.Format("Backup Service parameters were loaded"), EventLogEntryType.Information);
-                    }
-                    parametersdoc = null;
+                    LogEvent($"Backup Service parameters file {paramsFile} doesn't exist", EventLogEntryType.Error);
                 }
                 else
                 {
-                    this.LogEvent(String.Format("Backup Service parameters file doesn't exist"), EventLogEntryType.Error);
-                    this.IsReady = false;
+                    bool docParsed = true;
+                    XmlDocument docParameters = new XmlDocument();
+                    try
+                    {
+                        docParameters.Load(paramsFile);
+                    }
+                    catch (XmlException ex)
+                    {
+                        docParsed = false;
+                        LogEvent($"Parameters file couldn't be read: {ex.Message}", EventLogEntryType.Error);
+                    }
+                    if (docParsed)
+                    {
+                        XmlNode backupParameters = docParameters.ChildNodes.Item(1).ChildNodes.Item(0);
+                        sourcePath = getAttr(backupParameters, "source");
+                        destinationPath = getAttr(backupParameters, "destination");
+                        weekDay = Convert.ToInt32(getAttr(backupParameters, "dayofweek"));
+                        time = getAttr(backupParameters, "hour");
+                        isReady = true;
+
+                        LogEvent("Backup Service parameters were loaded", EventLogEntryType.Information);
+                    }
                 }
             }
+        }
+
+        private string getAttr(XmlNode backupParameters, string itemName)
+        {
+            return backupParameters.Attributes.GetNamedItem(itemName).Value.Trim();
         }
     }
 }

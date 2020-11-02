@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Parameters>
+	<Backup source="C:\Users\blaec\Downloads" 
+			destination="C:\Users\blaec\Downloads\backup"
+			dayofweek="0" 
+			hour="04:40:00"/>
+</Parameters>

@@ -10,46 +10,44 @@ namespace monitorservice
 {
     class backupfiles
     {
-        public string source_path = "";
-        public string destination_path = "";
-        public string error_message = "";
-        public Boolean IsBusy = false;
-        public Boolean DoBackup()
-        {
-            Boolean result = default(Boolean);
-            this.IsBusy = false;
+        public string sourcePath = "";
+        public string destinationPath = "";
+        public string errorMessage = "";
+        public bool isBusy = default;
 
-            string destFileName = this.destination_path + 
-                "\\backup_" + System.DateTime.Now.ToString("MMM-dd-yyyy") + "-" + 
-                System.DateTime.Now.ToString("hh: mm: ss").Replace(":"," - ")+".zip";
+        public bool DoBackup()
+        {
+            bool result = true;
+            isBusy = false;
+
+            string destFileName = $"{destinationPath}\\backup_{DateTime.Now:yyyy-MM-dd hh-mm-ss}.zip";
             using (ZipFile zipFile = new ZipFile())
             {
                 string[] fileList = new string[1];
-                result = true;
-                this.error_message = "";
+                errorMessage = "";
                 try
                 {
-                    fileList = Directory.GetFiles(this.source_path + "\\");
+                    fileList = Directory.GetFiles(sourcePath + "\\");
                 }
                 catch (Exception exception)
                 {
-                    this.error_message = String.Format("MonitorService: Folder file list can't be read: {0}", exception.Message);
                     result = false;
+                    errorMessage = $"MonitorService: Folder file list can't be read: {exception.Message}";
                 }
                 finally
                 {
                     if (result)
                     {
-                        this.IsBusy = true;
-                        zipFile.Encryption = EncryptionAlgorithm.WinZipAes256;
-                        zipFile.AddProgress += (this.zipFile_AddProgress);
-                        zipFile.AddDirectory(this.source_path);
+                        isBusy = true;
+                        //zipFile.Encryption = EncryptionAlgorithm.WinZipAes256;
+                        zipFile.AddProgress += zipFile_AddProgress;
+                        zipFile.AddDirectory(sourcePath);
                         zipFile.Save(destFileName);
-                        this.IsBusy = false;
+                        isBusy = false;
                     }
                 }
             }
-            return (result);
+            return result;
         }
 
         void zipFile_AddProgress(object sender, AddProgressEventArgs e)
