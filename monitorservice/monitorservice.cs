@@ -11,13 +11,11 @@ namespace monitorservice
         private const string SERVICE_NAME = "MonitorService";
         private const string APP_NAME = "Application";
 
-        private string homeDir = (new System.IO.DirectoryInfo(System.AppDomain.CurrentDomain.BaseDirectory)).FullName.Trim();
-        private string sourcePath = "";
-        private string destinationPath = "";
-        private int weekDay = 0;
-        private string time = "";
-        private bool isReady = false;
-        private backupfiles BackupEngine = new backupfiles();
+        private string homeDir = (new System.IO.DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory)).FullName.Trim();
+        private int weekDay = default;
+        private string time = default;
+        private bool isReady = default;
+        private BackupFiles BackupEngine;
 
         public Timer ServiceTimer { get; set; } = null;
 
@@ -63,15 +61,13 @@ namespace monitorservice
                 {
                     return;
                 }
-                if (BackupEngine.isBusy) //If backup process was previously started we do nothing
+                if (BackupEngine.IsBusy) //If backup process was previously started we do nothing
                 {
                     return;
                 }
                 LogEvent($"{SERVICE_NAME} start backup", EventLogEntryType.Information);
                 try
                 {
-                    BackupEngine.sourcePath = sourcePath;
-                    BackupEngine.destinationPath = destinationPath;
                     BackupEngine.DoBackup();
                 }
                 catch (Exception ex)
@@ -136,8 +132,9 @@ namespace monitorservice
                     if (docParsed)
                     {
                         XmlNode backupParameters = docParameters.ChildNodes.Item(1).ChildNodes.Item(0);
-                        sourcePath = getAttr(backupParameters, "source");
-                        destinationPath = getAttr(backupParameters, "destination");
+                        BackupEngine = new BackupFiles(
+                            getAttr(backupParameters, "source"),
+                            getAttr(backupParameters, "destination"));
                         weekDay = Convert.ToInt32(getAttr(backupParameters, "dayofweek"));
                         time = getAttr(backupParameters, "hour");
                         isReady = true;

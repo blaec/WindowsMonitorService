@@ -49,7 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="backupfiles.cs" />
+    <Compile Include="BackupFiles.cs" />
     <Compile Include="monitorservice.cs">
       <SubType>Component</SubType>
     </Compile>
