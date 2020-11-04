@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using Ionic.Zip;
 
 namespace monitorservice
@@ -19,33 +20,25 @@ namespace monitorservice
 
         public bool DoBackup()
         {
-            bool result = true;
-            IsBusy = false;
+            bool result = false;
 
-            string destFileName = $"{destinationPath}\\backup_{DateTime.Now:yyyy-MM-dd hh-mm-ss}.zip";
             using (ZipFile zipFile = new ZipFile())
             {
-                string[] fileList = new string[1];
-                try
+                if (!isSourceFolderEmpty())
                 {
-                    fileList = Directory.GetFiles(sourcePath + "\\");
-                }
-                catch (Exception)
-                {
-                    result = false;
-                }
-                finally
-                {
-                    if (result)
-                    {
-                        IsBusy = true;
-                        zipFile.AddDirectory(sourcePath);
-                        zipFile.Save(destFileName);
-                        IsBusy = false;
-                    }
+                    IsBusy = true;
+                    zipFile.AddDirectory(sourcePath);
+                    zipFile.Save($"{destinationPath}\\backup_{DateTime.Now:yyyy-MM-dd hh-mm-ss}.zip");
+                    result = true;
+                    IsBusy = false;
                 }
             }
             return result;
+        }
+
+        private bool isSourceFolderEmpty()
+        {
+            return !Directory.EnumerateFileSystemEntries(sourcePath + "\\").Any();
         }
     }
 }

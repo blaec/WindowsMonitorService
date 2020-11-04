@@ -12,8 +12,8 @@ namespace monitorservice
         private const string APP_NAME = "Application";
 
         private string homeDir = (new System.IO.DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory)).FullName.Trim();
-        private int weekDay = default;
-        private string time = default;
+        private int backupWeekDay = default;
+        private string afterTime = default;
         private bool isReady = default;
         private BackupFiles BackupEngine;
 
@@ -50,31 +50,27 @@ namespace monitorservice
         {
             if (isReady)
             {
-                if (weekDay != 0) //Need to know if current weekday matches parameter's weekday
+                if ((int)DateTime.Now.DayOfWeek + 1 == backupWeekDay        // Need to know if current weekday matches parameter's weekday
+                    && DateTime.Now.TimeOfDay >= TimeSpan.Parse(afterTime)  // If current daytime is earlier than defined in parameters, the process is stoped
+                    && !BackupEngine.IsBusy)                                // If backup process was previously started we do nothing
                 {
-                    if ((int)DateTime.Now.DayOfWeek + 1 != weekDay)
+                    bool isBackupSuccessful = false;
+                    string errMessage = $"{SERVICE_NAME} failed to backup";
+                    try
                     {
-                        return;
+                        isBackupSuccessful = BackupEngine.DoBackup();
+                    }
+                    catch (Exception ex)
+                    {
+                        errMessage = $"{errMessage} {ex.Message}";
+                    }
+
+                    // Log backup result
+                    if (!isBackupSuccessful)
+                    {
+                        LogEvent(errMessage, EventLogEntryType.Error);
                     }
                 }
-                if (DateTime.Now.TimeOfDay < TimeSpan.Parse(time)) //If current daytime is earlier than defined in parameters, the process is stoped
-                {
-                    return;
-                }
-                if (BackupEngine.IsBusy) //If backup process was previously started we do nothing
-                {
-                    return;
-                }
-                LogEvent($"{SERVICE_NAME} start backup", EventLogEntryType.Information);
-                try
-                {
-                    BackupEngine.DoBackup();
-                }
-                catch (Exception ex)
-                {
-                    LogEvent($"{SERVICE_NAME} failed to backup {ex.Message}", EventLogEntryType.Error);
-                }
-                LogEvent($"{SERVICE_NAME} backup complete", EventLogEntryType.Information);
             }
         }
 
@@ -83,6 +79,8 @@ namespace monitorservice
         /// </summary>
         protected override void OnStop()
         {
+            isReady = default;
+
             ServiceTimer.Stop();
             ServiceTimer.Dispose();
             ServiceTimer = null;
@@ -104,7 +102,6 @@ namespace monitorservice
         {
             string paramsFolder = homeDir + "\\parameters";
             string paramsFile = paramsFolder + "\\srvparams.xml";
-            isReady = false;
             if (!System.IO.Directory.Exists(paramsFolder))
             {
                 System.IO.Directory.CreateDirectory(paramsFolder);
@@ -135,8 +132,8 @@ namespace monitorservice
                         BackupEngine = new BackupFiles(
                             getAttr(backupParameters, "source"),
                             getAttr(backupParameters, "destination"));
-                        weekDay = Convert.ToInt32(getAttr(backupParameters, "dayofweek"));
-                        time = getAttr(backupParameters, "hour");
+                        backupWeekDay = Convert.ToInt32(getAttr(backupParameters, "dayofweek"));
+                        afterTime = getAttr(backupParameters, "hour");
                         isReady = true;
 
                         LogEvent("Backup Service parameters were loaded", EventLogEntryType.Information);
